@@ -35,7 +35,8 @@ export type StoreState = Readonly<{
   itemProtos: ItemProto[]
   protoStatus: 'none' | 'loading' | 'ready' | 'error'
   protoError: string
-  loadProtos: (savePath: string) => Promise<void>
+  /** Reads item protos for the game of savePath; with base64 also opens that save (protos first, so non-Fallout 2 saves such as Sonora parse) */
+  loadProtos: (savePath: string, base64?: string) => Promise<void>
   inventoryOp: (op: InventoryOp) => void
 }>
 
@@ -101,8 +102,10 @@ export const useAPIStore = create<StoreState>((set, get) => ({
   protoStatus: 'none',
   protoError: '',
 
-  async loadProtos(savePath) {
+  async loadProtos(savePath, base64) {
     set({ protoStatus: 'loading', protoError: '' })
+    let protos: ItemProto[] | undefined
+    let protoError = ''
     try {
       const fs = await getFileService()
       // oxlint-disable-next-line new-cap
@@ -110,23 +113,32 @@ export const useAPIStore = create<StoreState>((set, get) => ({
       if (error) {
         throw new Error(error)
       }
-      const protos = JSON.parse(json) as ItemProto[]
-      handler.setProtos(protos)
-      // Re-read the save with exact item sizes (matters for containers)
-      handler.fromBase64(handler.toBase64())
-      set({
-        itemProtos: protos,
-        protoStatus: 'ready',
-        data: handler.getData(),
-        inventory: handler.getInventoryRecords(),
-      })
+      protos = JSON.parse(json) as ItemProto[]
     } catch (error) {
-      handler.setProtos(undefined)
-      set({
-        protoStatus: 'error',
-        protoError: error instanceof Error ? error.message : String(error),
-        inventory: [],
-      })
+      protoError = error instanceof Error ? error.message : String(error)
+    }
+
+    handler.setProtos(protos)
+    set({
+      itemProtos: protos ?? [],
+      protoStatus: protos ? 'ready' : 'error',
+      protoError,
+      inventory: [],
+    })
+
+    if (base64 !== undefined) {
+      // Open the save with exact item sizes; throws to the caller on a bad save
+      get().load(savePath, base64)
+      return
+    }
+    if (protos) {
+      try {
+        // Re-read the save with exact item sizes (matters for containers)
+        handler.fromBase64(handler.toBase64())
+        set({ data: handler.getData(), inventory: handler.getInventoryRecords() })
+      } catch {
+        // no save loaded yet
+      }
     }
   },
 

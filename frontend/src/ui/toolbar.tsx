@@ -144,8 +144,7 @@ export const Toolbar = () => {
       if (error) {
         toast.error(error)
       } else if (path) {
-        load(path, content)
-        void loadProtos(path)
+        await loadProtos(path, content)
       }
     } catch (error) {
       toast.error(getError(error).message)
