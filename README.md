@@ -1,5 +1,62 @@
 # Fallout 2 Save Game Editor
 
+> **This fork** (by [MainMrFractal](https://github.com/MainMrFractal)) adds inventory editing,
+> a money editor and a container capacity tool. Original project:
+> [efossvold/fallout2-save-editor](https://github.com/efossvold/fallout2-save-editor). 
+> English below · [Русский](#ru-fork)
+
+## What's new in this fork
+
+- **INVENTORY tab** (next to TRAITS / REPUTATION / KILLS):
+  - add any item — search by name or PID, filter by category (weapons, ammo, armor,
+    drugs, misc, keys, bags);
+  - separate **★ Special** category with items from special encounters
+    (Solar Scorcher, Holy Hand Grenade, Bridgekeeper's Robes, Alien Blaster, Hypo,
+    Monument Chunk, Daisies);
+  - change quantity, delete, or **mutate** an item into another one;
+  - equipped items are protected (unequip them in game first);
+  - every change is re-parsed and rolled back if anything looks wrong.
+- **Money** field in PLAYER INFO.
+- **Exact item parsing**: after opening a save the editor finds `master.dat` and reads
+  the real item prototypes (types, art, default ammo). This also fixes saves with
+  containers that hold items, unknown item ids and unexpected item fields.
+- **[tools/bigstorage](tools/bigstorage/README.md)** — raises the capacity of all
+  lockers, chests, bags and the car trunk to 999 (does not touch saves).
+
+Inventory editing needs the desktop app and the game files (`master.dat` must be in a
+folder above the save). Always keep a backup of `data/SAVEGAME` and save edits to a
+separate slot first.
+
+Build on macOS: `wails3 task darwin:package`, then `open bin/F2SaveEditor.app`.
+
+<a id="ru-fork"></a>
+
+## Что нового в этом форке (RU)
+
+- **Вкладка INVENTORY** (рядом с TRAITS / REPUTATION / KILLS):
+  - добавление любого предмета — поиск по названию или PID, фильтр по категориям;
+  - отдельная категория **★ Special** — предметы из особых встреч (Солнечный жезл,
+    Святая ручная граната, Мантия Хранителя моста, Бластер пришельцев, Гипо,
+    Кусок монумента, Ромашки);
+  - изменение количества, удаление и **мутация** предмета в другой;
+  - надетые предметы защищены (сначала сними их в игре);
+  - после каждого изменения сейв перечитывается, при ошибке всё откатывается.
+- **Деньги** — поле Money в PLAYER INFO.
+- **Точный разбор предметов**: при открытии сейва редактор сам находит `master.dat` и
+  читает настоящие описания предметов. Заодно чинит сейвы с сумками, неизвестными
+  предметами и нестандартными полями.
+- **[tools/bigstorage](tools/bigstorage/README.md)** — вместимость всех шкафов,
+  сундуков, сумок и багажника машины до 999 (сейвы не трогает).
+
+Для инвентаря нужна десктоп-версия и файлы игры (`master.dat` в папке выше сейва).
+Делай бэкап `data/SAVEGAME` и сохраняй изменения сначала в отдельный слот.
+
+Сборка на macOS: `wails3 task darwin:package`, затем `open bin/F2SaveEditor.app`.
+
+---
+
+## Original README
+
 Basic save game editor for Fallout 2.
 
 ![Image from Gyazo](https://i.gyazo.com/df7d324e1d3594cb25311675f768e4a4.png)
