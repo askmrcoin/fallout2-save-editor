@@ -3,12 +3,14 @@ import { create } from 'preact-zustand'
 import type { StatNames } from '../api/save-data'
 import type * as M from '../api/types/map'
 import type { PerkValues } from '../api/types/perks'
+import type { InventoryOp, InvRecord, ItemProto } from '../api/inventory'
 
 import { Crippled } from '../api/data/crippled'
 import { createSaveData } from '../api/save-data'
 import { saveHandler } from '../api/save-handler'
 import * as U from '../api/utils'
 import { getPerk } from './selectors'
+import { getFileService } from './utils'
 
 export const handler = saveHandler({ isDebug: false })
 
@@ -27,6 +29,14 @@ export type StoreState = Readonly<{
   setData: (data: M.SaveGameData) => void
   setPanelsHeight: (height: number) => void
   toggleDebugWindow: () => void
+
+  // Patch: inventory editing
+  inventory: InvRecord[]
+  itemProtos: ItemProto[]
+  protoStatus: 'none' | 'loading' | 'ready' | 'error'
+  protoError: string
+  loadProtos: (savePath: string) => Promise<void>
+  inventoryOp: (op: InventoryOp) => void
 }>
 
 export const useAPIStore = create<StoreState>((set, get) => ({
@@ -82,6 +92,57 @@ export const useAPIStore = create<StoreState>((set, get) => ({
     set({
       currentSaveFile: filename,
       data: handler.getData(),
+      inventory: handler.hasProtos() ? handler.getInventoryRecords() : [],
+    })
+  },
+
+  inventory: [],
+  itemProtos: [],
+  protoStatus: 'none',
+  protoError: '',
+
+  async loadProtos(savePath) {
+    set({ protoStatus: 'loading', protoError: '' })
+    try {
+      const fs = await getFileService()
+      // oxlint-disable-next-line new-cap
+      const [json, error] = (await fs.ReadItemProtos(savePath)) as [string, string]
+      if (error) {
+        throw new Error(error)
+      }
+      const protos = JSON.parse(json) as ItemProto[]
+      handler.setProtos(protos)
+      // Re-read the save with exact item sizes (matters for containers)
+      handler.fromBase64(handler.toBase64())
+      set({
+        itemProtos: protos,
+        protoStatus: 'ready',
+        data: handler.getData(),
+        inventory: handler.getInventoryRecords(),
+      })
+    } catch (error) {
+      handler.setProtos(undefined)
+      set({
+        protoStatus: 'error',
+        protoError: error instanceof Error ? error.message : String(error),
+        inventory: [],
+      })
+    }
+  },
+
+  inventoryOp(op) {
+    const before = handler.toBase64()
+    try {
+      // Write pending edits first, then change the inventory layout
+      handler.setData({ ...get().data })
+      handler.applyInventoryOp(op)
+    } catch (error) {
+      handler.fromBase64(before)
+      throw error
+    }
+    set({
+      data: handler.getData(),
+      inventory: handler.getInventoryRecords(),
     })
   },
 

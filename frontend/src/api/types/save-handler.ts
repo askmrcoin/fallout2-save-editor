@@ -1,5 +1,6 @@
 import type { InventoryItem } from './items'
 import type * as M from './map'
+import type { InventoryOp, InvRecord, ItemProto } from '../inventory'
 
 export type Getters<T extends Record<string, unknown>, Prefix extends string = ''> = {
   [Key in keyof T as `get${Prefix}${Capitalize<string & keyof T>}`]: () => T[Key]
@@ -24,6 +25,10 @@ export type SaveHandler = {
   setData: (data: M.SaveGameData) => void
   toBase64: () => string
   getData: () => M.SaveGameData
+  setProtos: (protos: ItemProto[] | undefined) => void
+  hasProtos: () => boolean
+  getInventoryRecords: () => InvRecord[]
+  applyInventoryOp: (op: InventoryOp) => void
 } & Getters<M.MapHeaderSection> &
   Setters<M.MapHeaderSection> &
   // Player and inventory

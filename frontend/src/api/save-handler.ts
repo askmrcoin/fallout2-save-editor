@@ -5,6 +5,7 @@ import type { Getters, SaveHandler, Setters } from './types/save-handler'
 // oxlint-disable typescript/no-unnecessary-type-parameters
 import { getCategory, ItemCategory, ITEMS } from './data/items'
 import * as M from './map'
+import * as I from './inventory'
 import { createSaveData } from './save-data'
 import * as U from './utils'
 
@@ -17,6 +18,10 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
   let dataView: DataView | undefined
   let saveData = createSaveData()
   let map = M.createMap()
+  // Patch: offset of the Money item (PID 41) in the inventory
+  let moneyOffset = -1
+  // Patch: item prototypes read from the game's data files (enables inventory editing)
+  let protos: I.ProtoMap | undefined
   const isDebug = args?.isDebug ?? false
 
   const logger = (...text: (string | number | object)[]): void => {
@@ -250,14 +255,66 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
     }
   }
 
-  const readInventoryItem = (offset: number): [InventoryItem, number] => {
+  // Patch: tolerate unknown item ids by probing the record size
+  const isValidItemAt = (off: number): boolean => {
+    try {
+      const id = getValue(off, M.inventoryKeys.id).toString()
+      if (!ITEMS[id]) {
+        return false
+      }
+      const qty = getValue(off, M.inventoryKeys.qty) as number
+      return qty >= 1 && qty <= 1_000_000
+    } catch {
+      return false
+    }
+  }
+
+  const looksLikeF6At = (off: number): boolean => {
+    try {
+      const dv = getHandler().dv
+      for (let k = 0; k < 7; k += 1) {
+        const v = dv.getInt32(off + 0x08 + 4 * k)
+        if (v < 1 || v > 99) {
+          return false
+        }
+      }
+      const hp = dv.getInt32(off + 0x24)
+      return hp >= 1 && hp <= 9999
+    } catch {
+      return false
+    }
+  }
+
+  const readUnknownItem = (offset: number, itemId: string, isLast: boolean): [InventoryItem, number] => {
+    const baseSize = 0x58 + 0x04
+    const candidates = [0x04, 0x00, 0x08]
+    const extra = candidates.find((c) =>
+      isLast ? looksLikeF6At(offset + baseSize + c + 0x04) : isValidItemAt(offset + baseSize + c),
+    )
+    if (extra === undefined) {
+      throw new Error(`Unknown item id (${itemId}): size probe failed (patched build).`)
+    }
+    logger(`Unknown item ${itemId}: record size resolved with extra ${extra}`)
+    return [
+      {
+        id: itemId,
+        qty: getValue(offset, M.inventoryKeys.qty) as number,
+        desc: `Unknown item (${itemId})`,
+        category: 'misc',
+        qtyContained: getValue(offset, M.inventoryKeys.qtyContained) as number,
+      },
+      offset + baseSize + extra,
+    ]
+  }
+
+  const readInventoryItem = (offset: number, isLast = false): [InventoryItem, number] => {
     // Number of fields * field size
     const itemSize = 0x58 + 0x04
     const itemId = getValue(offset, M.inventoryKeys.id).toString()
     const item = ITEMS[itemId]
 
     if (!item) {
-      throw new Error(`Found unknown item id (${itemId}). Editing this file will corrupt it.`)
+      return readUnknownItem(offset, itemId, isLast)
     }
 
     const qty = getValue(offset, M.inventoryKeys.qty) as number
@@ -293,7 +350,8 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
     for (const entry of M.INVENTORY_ALWAYS_ZERO) {
       const value = getValue(offset, entry)
       if (value !== 0) {
-        throw new Error(`Possible invalid/corrupt item with ID '${itemId}'. `)
+        // Patch: known item id means alignment is fine; only warn
+        logger(`Item ${itemId}: non-zero field at ${entry.offset} (${value})`)
       }
     }
 
@@ -374,6 +432,24 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
 
     getInventoryItems() {
       const handler = getHandler()
+
+      if (protos) {
+        try {
+          const { records, end } = I.parseInventory(handler.dv, map.f5.offset, protos)
+          moneyOffset = records.find(r => r.pid === 41)?.offset ?? -1
+          map.f6.offset = end + 0x04
+          return records.map(r => ({
+            id: String(r.pid),
+            qty: r.qty,
+            desc: protos?.get(r.pid)?.name || ITEMS[String(r.pid)]?.desc || `Item ${r.pid}`,
+            category: I.ItemType[r.type].toLowerCase(),
+            qtyContained: r.nested.length,
+          }))
+        } catch (error) {
+          logger('Proto based inventory parse failed, using fallback', String(error))
+          moneyOffset = -1
+        }
+      }
       const numInventoryItems = this.getNumInventoryItems()
       const itemsStart = U.indexOf(handler.buf, new Uint8Array([0, 0, 70, 80])) + 0x80
 
@@ -381,7 +457,10 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
       const items = []
 
       for (let i = 0; i < numInventoryItems; i += 1) {
-        const [item, nextOffset] = readInventoryItem(currentOffset)
+        if (getValue(currentOffset, M.inventoryKeys.id).toString() === '41') {
+          moneyOffset = currentOffset
+        }
+        const [item, nextOffset] = readInventoryItem(currentOffset, i === numInventoryItems - 1)
         currentOffset = nextOffset
         items.push(item)
       }
@@ -481,6 +560,10 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
       setSectionData('f15', data)
       setSectionData('f17', data)
 
+      if (moneyOffset >= 0 && typeof data.money === 'number' && data.money >= 1) {
+        setValue(moneyOffset, M.inventoryKeys.qty, Math.trunc(data.money))
+      }
+
       this.fromBase64(getHandler().buf.toBase64())
     },
 
@@ -489,6 +572,7 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
       dataView = new DataView(buffer.buffer)
       saveData = createSaveData()
       map = M.createMap()
+      moneyOffset = -1
 
       map.f5.offset = U.indexOf(buffer, new Uint8Array(M.F5_MARKER))
 
@@ -512,6 +596,9 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
       getSectionData('f15')
       getSectionData('f17')
 
+      saveData.money =
+        moneyOffset >= 0 ? (getValue(moneyOffset, M.inventoryKeys.qty) as number) : -1
+
       if (data) {
         this.setData({
           ...this.getData(),
@@ -520,6 +607,37 @@ export const saveHandler = (args?: SaveHandlerArgs): SaveHandler => {
       }
 
       return this
+    },
+
+    setProtos(list) {
+      protos = list ? new Map(list.map(p => [p.pid, p])) : undefined
+    },
+
+    hasProtos() {
+      return protos !== undefined
+    },
+
+    getInventoryRecords() {
+      if (!protos) {
+        return []
+      }
+      return I.parseInventory(getHandler().dv, map.f5.offset, protos).records
+    },
+
+    applyInventoryOp(op) {
+      if (!protos) {
+        throw new Error('Game data (master.dat) is not loaded')
+      }
+      const prev = getHandler().buf.toBase64()
+      const next = I.applyInventoryOp(getHandler().buf, map.f5.offset, protos, op)
+      try {
+        this.fromBase64(next.toBase64())
+        // Must parse cleanly with the new layout, otherwise roll back
+        I.parseInventory(getHandler().dv, map.f5.offset, protos)
+      } catch (error) {
+        this.fromBase64(prev)
+        throw error
+      }
     },
 
     toBase64() {

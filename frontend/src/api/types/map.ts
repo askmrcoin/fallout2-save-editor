@@ -124,7 +124,10 @@ export interface SaveGameData
     MapF11Section,
     MapF13Section,
     MapF15Section,
-    MapF17Section {}
+    MapF17Section {
+  // Patch: amount of money in inventory (-1 = no money item)
+  money?: number
+}
 
 export interface SaveGameDataExtra {
   inGameTimeText: string

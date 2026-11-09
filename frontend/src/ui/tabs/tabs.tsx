@@ -50,6 +50,7 @@ export const Tabs = () => {
         <TabButton index={0}>TRAITS</TabButton>
         <TabButton index={1}>REPUTATION</TabButton>
         <TabButton index={2}>KILLS</TabButton>
+        <TabButton index={3}>INVENTORY</TabButton>
       </div>
       <div
         class={cx(
@@ -60,6 +61,7 @@ export const Tabs = () => {
         {tabIndex === 0 && <E.TraitsEditor />}
         {tabIndex === 1 && <E.GVAREditor />}
         {tabIndex === 2 && <E.KillsEditor />}
+        {tabIndex === 3 && <E.InventoryEditor />}
       </div>
     </>
   )

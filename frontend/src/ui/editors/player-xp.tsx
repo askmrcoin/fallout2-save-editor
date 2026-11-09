@@ -3,6 +3,7 @@ import { flex } from '~/styled-system/patterns'
 import { getLevelXP } from '../../api/data/xp-levels'
 import { css } from '../../styled-system/css'
 import { MAX_LEVEL, MIN_LEVEL } from '../constants'
+import { MoneyChanger } from '../money-changer'
 import { NameChanger } from '../name-changer'
 import { PanelHeader } from '../panel'
 import * as S from '../selectors'
@@ -19,6 +20,8 @@ export const PlayerXP = () => {
       <PanelHeader title="PLAYER INFO" />
 
       <NameChanger name={data.characterName} />
+
+      <MoneyChanger />
 
       <ValueSetter
         name="Age"

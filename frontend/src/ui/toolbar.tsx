@@ -99,6 +99,7 @@ export const Toolbar = () => {
   const save = useAPIStore(s => s.save)
   const currentSaveFile = useAPIStore(s => s.currentSaveFile)
   const load = useAPIStore(s => s.load)
+  const loadProtos = useAPIStore(s => s.loadProtos)
   const toggleDebugWindow = useAPIStore(s => s.toggleDebugWindow)
   const isWeb = useIsWeb()
   const showDebugWindow = useAPIStore(s => s.showDebugWindow)
@@ -144,6 +145,7 @@ export const Toolbar = () => {
         toast.error(error)
       } else if (path) {
         load(path, content)
+        void loadProtos(path)
       }
     } catch (error) {
       toast.error(getError(error).message)
