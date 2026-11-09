@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 type ItemProto struct {
@@ -33,6 +34,8 @@ type ItemProto struct {
 	AmmoQuantity   int32  `json:"ammoQuantity"`
 	Charges        int32  `json:"charges"`
 	KeyCode        int32  `json:"keyCode"`
+	// Special marks unique items from special encounters (★ category in the UI)
+	Special bool `json:"special"`
 }
 
 type datEntry struct {
@@ -142,8 +145,9 @@ func (d *datArchive) read(name string) ([]byte, bool, error) {
 type gameSources struct {
 	dataDir string
 	looseIx map[string]string // lower-case relative path -> real path
-	dats    []*datArchive     // patch000.dat first, then master.dat
+	dats    []*datArchive     // highest priority first, master.dat last
 	master  *datArchive
+	sonora  bool // Fallout: Sonora (FISSION engine)
 }
 
 func findInDir(dir, lowerName string) string {
@@ -198,7 +202,20 @@ func openGameSources(savePath string) (*gameSources, error) {
 		})
 	}
 
+	gs.sonora = isSonora(root)
+
 	if p := findInDir(root, "patch000.dat"); p != "" {
+		if d, err := openDat(p); err == nil {
+			gs.dats = append(gs.dats, d)
+		}
+	}
+	// FISSION (Fallout: Sonora): mods/*.dat override the game data, then fission.dat
+	for _, p := range modDats(root) {
+		if d, err := openDat(p); err == nil {
+			gs.dats = append(gs.dats, d)
+		}
+	}
+	if p := findInDir(root, "fission.dat"); p != "" {
 		if d, err := openDat(p); err == nil {
 			gs.dats = append(gs.dats, d)
 		}
@@ -211,6 +228,84 @@ func openGameSources(savePath string) (*gameSources, error) {
 	gs.dats = append(gs.dats, master)
 	gs.master = master
 	return gs, nil
+}
+
+func isSonora(root string) bool {
+	if findInDir(root, "fsonoradlc.exe") != "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(root), "sonora")
+}
+
+// modDats lists FISSION mod archives, highest priority first. Enabled entries of
+// mods/mods_order.txt (enabled|datName|...) come first in the order given; any
+// other .dat files in mods/ follow alphabetically.
+func modDats(root string) []string {
+	modsDir := findInDir(root, "mods")
+	if modsDir == "" {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	if txt, err := os.ReadFile(filepath.Join(modsDir, "mods_order.txt")); err == nil {
+		for _, line := range strings.Split(strings.ReplaceAll(string(txt), "\r", ""), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			f := strings.Split(line, "|")
+			if len(f) < 2 {
+				continue
+			}
+			if f[0] == "0" || strings.EqualFold(f[0], "false") {
+				seen[strings.ToLower(f[1])] = true
+				continue
+			}
+			if p := findInDir(modsDir, strings.ToLower(f[1])); p != "" && !seen[strings.ToLower(f[1])] {
+				seen[strings.ToLower(f[1])] = true
+				out = append(out, p)
+			}
+		}
+	}
+	items, _ := os.ReadDir(modsDir)
+	for _, it := range items {
+		n := strings.ToLower(it.Name())
+		if !it.IsDir() && strings.HasSuffix(n, ".dat") && !seen[n] {
+			out = append(out, filepath.Join(modsDir, it.Name()))
+		}
+	}
+	return out
+}
+
+// Unique items from Fallout 2 special encounters, by PID.
+var fo2SpecialPids = map[int32]bool{
+	390: true, // Solar Scorcher (Guardian of Forever)
+	421: true, // Holy Hand Grenade (King Arthur's Knights)
+	524: true, // Bridgekeeper's Robes (Bridge of Death)
+	120: true, // Alien Blaster (trader Willy)
+	525: true, // Hypo (crashed shuttle)
+	424: true, // Monument Chunk (giant stone head)
+	474: true, // Daisies (remains of a whale)
+}
+
+// Fallout: Sonora uniques, by English name (PIDs differ between versions).
+// Special encounters (found in maps rnd*.map) plus one-of-a-kind gear.
+var sonoraSpecialNames = map[string]bool{
+	"blaster":                  true, // Open-Air Cinema
+	"rail gun":                 true, // Mobile Fortress
+	"book of bemis":            true, // Henry Bemis
+	"bemis glasses":            true, // Henry Bemis
+	"letter from vault-tec":    true, // Lost Vault
+	"dixon's machine gun":      true,
+	"tejada machine gun":       true,
+	"koa":                      true,
+	"turbo plasma rifle":       true,
+	"gatling laser":            true,
+	"laser emitter (improved)": true,
+	"reinforced shock spear":   true,
+	"mexican power armor":      true,
+	"¡viva villa!":             true,
+	"pip-boy booster":          true,
 }
 
 func (gs *gameSources) read(name string) ([]byte, error) {
@@ -233,10 +328,22 @@ func parseMsg(data []byte) map[int32]string {
 	for _, m := range msgLine.FindAllSubmatch(data, -1) {
 		id, err := strconv.Atoi(string(m[1]))
 		if err == nil {
-			out[int32(id)] = strings.TrimSpace(string(m[2]))
+			out[int32(id)] = strings.TrimSpace(latin1ToUTF8(m[2]))
 		}
 	}
 	return out
+}
+
+// latin1ToUTF8 decodes 8-bit .msg text (English files are Windows-1252) unless it is already UTF-8.
+func latin1ToUTF8(b []byte) string {
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	r := make([]rune, len(b))
+	for i, c := range b {
+		r[i] = rune(c)
+	}
+	return string(r)
 }
 
 func be32(b []byte, off int) int32 {
@@ -311,6 +418,11 @@ func readItemProtos(savePath string) ([]ItemProto, error) {
 		}
 		msgID := be32(data, 0x04)
 		p.Name = names[msgID]
+		if gs.sonora {
+			p.Special = sonoraSpecialNames[strings.ToLower(p.Name)]
+		} else {
+			p.Special = fo2SpecialPids[p.Pid]
+		}
 		out = append(out, p)
 	}
 

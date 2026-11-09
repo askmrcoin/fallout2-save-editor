@@ -149,7 +149,7 @@ const ItemPicker = (p: PickerProps) => {
   const list = itemProtos
     .filter(x => {
       if (category === 'special') {
-        return isSpecialEncounterItem(x.pid)
+        return isSpecialEncounterItem(x)
       }
       return category === 'all' || x.type === category
     })
@@ -221,7 +221,7 @@ const ItemPicker = (p: PickerProps) => {
             class={selected === proto.pid ? pickerRowActive : pickerRow}
             onClick={() => setSelected(proto.pid)}
           >
-            {isSpecialEncounterItem(proto.pid) ? '★ ' : ''}
+            {isSpecialEncounterItem(proto) ? '★ ' : ''}
             {name}
             {owned.has(proto.pid) ? ' (owned)' : ''}
           </button>
@@ -345,7 +345,7 @@ export const InventoryEditor = () => {
 
       {inventory.map((rec, index) => {
         const name = itemName(rec.pid, protoMap)
-        const isSpecial = isSpecialEncounterItem(rec.pid)
+        const isSpecial = isSpecialEncounterItem(protoMap.get(rec.pid))
         const isLocked = rec.equipped
         const tag = [
           isSpecial ? '★' : '',

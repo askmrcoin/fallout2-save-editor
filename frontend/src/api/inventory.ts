@@ -34,20 +34,11 @@ export interface ItemProto {
   ammoQuantity: number
   charges: number
   keyCode: number
+  /** Unique special-encounter item (decided by the Go loader per game: Fallout 2 or Sonora) */
+  special?: boolean
 }
 
 export type ProtoMap = Map<number, ItemProto>
-
-/** Unique items from Fallout 2 special encounters (shown as a separate category). */
-export const SPECIAL_ENCOUNTER_PIDS: ReadonlySet<number> = new Set([
-  390, // Solar Scorcher (Guardian of Forever)
-  421, // Holy Hand Grenade (King Arthur's Knights)
-  524, // Bridgekeeper's Robes (Bridge of Death)
-  120, // Alien Blaster (trader Willy)
-  525, // Hypo (crashed shuttle)
-  424, // Monument Chunk (giant stone head)
-  474, // Daisies (remains of a whale)
-])
 
 export const OBJECT_EQUIPPED = 0x07_00_00_00
 
@@ -114,7 +105,7 @@ export type InventoryOp =
   | { kind: 'setQty'; index: number; qty: number }
   | { kind: 'mutate'; index: number; pid: number }
 
-export const isSpecialEncounterItem = (pid: number): boolean => SPECIAL_ENCOUNTER_PIDS.has(pid)
+export const isSpecialEncounterItem = (proto: ItemProto | undefined): boolean => proto?.special === true
 
 const parseRecord = (dv: DataView, offset: number, protos: ProtoMap, depth: number): InvRecord => {
   if (depth > 4) {

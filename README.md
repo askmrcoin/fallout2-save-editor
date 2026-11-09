@@ -20,6 +20,12 @@
 - **Exact item parsing**: after opening a save the editor finds `master.dat` and reads
   the real item prototypes (types, art, default ammo). This also fixes saves with
   containers that hold items, unknown item ids and unexpected item fields.
+- **Fallout: Sonora** (FISSION engine) support: open
+  `Fallout-Sonora.app/Contents/Resources/data/SAVEGAME/SLOTxx/SAVE.DAT`. Item data is read
+  from `master.dat`, `fission.dat` and `mods/*.dat`; ★ Special then lists Sonora uniques
+  (Blaster, Rail Gun, Bemis' book and glasses, Dixon's and Tejada machine guns, Koa,
+  Turbo Plasma Rifle, Gatling laser, Mexican Power Armor, ¡Viva Villa!, Pip-Boy Booster…).
+  Don't use the REPUTATION tab with Sonora — its global variables are Fallout 2 ones.
 - **[tools/bigstorage](tools/bigstorage/README.md)** — raises the capacity of all
   lockers, chests, bags and the car trunk to 999 (does not touch saves).
 
@@ -45,6 +51,12 @@ Build on macOS: `wails3 task darwin:package`, then `open bin/F2SaveEditor.app`.
 - **Точный разбор предметов**: при открытии сейва редактор сам находит `master.dat` и
   читает настоящие описания предметов. Заодно чинит сейвы с сумками, неизвестными
   предметами и нестандартными полями.
+- **Fallout: Sonora** (движок FISSION): открывай
+  `Fallout-Sonora.app/Contents/Resources/data/SAVEGAME/SLOTxx/SAVE.DAT`. Предметы читаются
+  из `master.dat`, `fission.dat` и `mods/*.dat`; в ★ Special — уникальные вещи Соноры
+  (Бластер, Рельсовая пушка, книга и очки Бимиса, пулемёты Диксона и Техады, Коа,
+  турбоплазменная винтовка, Гатлинг-лазер, силовая броня Мексики, «Вива, Вилья!»,
+  усилитель Пип-Боя…). Вкладку REPUTATION для Соноры не трогай — там переменные Fallout 2.
 - **[tools/bigstorage](tools/bigstorage/README.md)** — вместимость всех шкафов,
   сундуков, сумок и багажника машины до 999 (сейвы не трогает).
 
